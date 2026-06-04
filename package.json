@@ -1,0 +1,14 @@
+{
+  "name": "chrome-extension-home-page",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Minimal Chrome new tab extension",
+  "scripts": {
+    "bundle": "node scripts/bundle.mjs bundle",
+    "dev": "node scripts/bundle.mjs watch"
+  },
+  "devDependencies": {
+    "archiver": "^7.0.1",
+    "chokidar": "^4.0.3"
+  }
+}
