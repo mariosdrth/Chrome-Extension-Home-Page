@@ -4,11 +4,23 @@
   "private": true,
   "description": "Minimal Chrome new tab extension",
   "scripts": {
-    "bundle": "node scripts/bundle.mjs bundle",
-    "dev": "node scripts/bundle.mjs watch"
+    "dev": "vite build --watch",
+    "dev:server": "vite",
+    "build": "vite build",
+    "bundle": "npm run build && node scripts/bundle.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@polyutils/components": "^2.8.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.1",
     "archiver": "^7.0.1",
-    "chokidar": "^4.0.3"
+    "typescript": "^6.0.3",
+    "vite": "^6.3.5"
   }
 }

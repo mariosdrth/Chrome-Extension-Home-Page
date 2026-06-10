@@ -4,88 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Home</title>
-    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="page" role="main">
-      <form
-        class="search-form"
-        id="search-form"
-        action="https://www.google.com/search"
-        method="get"
-      >
-        <label class="sr-only" id="search-label" for="search-query">Search Google</label>
-        <div class="search-shell">
-          <div class="engine-dropdown" id="engine-dropdown">
-            <button
-              id="engine-toggle"
-              type="button"
-              class="engine-toggle"
-              aria-live="polite"
-              aria-haspopup="menu"
-              aria-expanded="false"
-              aria-label="Search engine: Google"
-              title="Change search engine"
-            >
-              <span id="engine-icon" class="engine-icon" aria-hidden="true">G</span>
-              <span class="engine-caret" aria-hidden="true">▾</span>
-            </button>
-            <div id="engine-menu" class="engine-menu" role="menu" aria-label="Search engines"></div>
-          </div>
-          <input
-            id="search-query"
-            name="q"
-            type="search"
-            placeholder="Search the web"
-            autocomplete="off"
-            required
-          />
-          <button id="search-submit" type="submit">Search</button>
-        </div>
-      </form>
-
-      <section class="tiles-section" aria-label="Website shortcuts">
-        <div class="tiles-toolbar">
-          <h1>Shortcuts</h1>
-          <button id="add-tile" type="button">Add link</button>
-        </div>
-        <div id="tiles-grid" class="tiles-grid"></div>
-      </section>
-    </main>
-
-    <div id="tile-modal" class="modal" aria-hidden="true">
-      <div class="modal-backdrop" data-close-modal="true"></div>
-      <section
-        class="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="tile-modal-title"
-      >
-        <h2 id="tile-modal-title">Add shortcut</h2>
-        <form id="tile-form" class="tile-form">
-          <label for="tile-name">Name</label>
-          <input id="tile-name" name="name" type="text" maxlength="40" required />
-
-          <label for="tile-url">URL</label>
-          <input
-            id="tile-url"
-            name="url"
-            type="text"
-            placeholder="https://example.com"
-            autocomplete="off"
-            required
-          />
-
-          <p id="tile-form-error" class="form-error" role="alert"></p>
-
-          <div class="modal-actions">
-            <button id="tile-cancel" type="button" class="ghost-btn">Cancel</button>
-            <button id="tile-save" type="submit">Save</button>
-          </div>
-        </form>
-      </section>
-    </div>
-
-    <script src="newtab.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
