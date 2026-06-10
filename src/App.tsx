@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { FormEvent } from "react";
 import type { ChangeEvent } from "react";
-import { BarsIcon, Button, CloseIcon, PencilIcon, SearchIcon } from "@polyutils/components";
+import { BarsIcon, Button, CloseIcon, PencilIcon, PlusIcon, SearchIcon, ThemeToggle } from "@polyutils/components";
 import {
   defaultTileColor,
   defaultTileOpenBehavior,
@@ -34,6 +34,7 @@ const App = () => {
   const [tileOpenBehavior, setTileOpenBehavior] = useState<TileOpenBehavior>(
     initialSettings.tileOpenBehavior ?? defaultTileOpenBehavior
   );
+  const [faviconSrc, setFaviconSrc] = useState(initialSettings.faviconSrc ?? "");
   const [searchQuery, setSearchQuery] = useState("");
 
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -61,8 +62,19 @@ const App = () => {
       tiles,
       tileSize,
       tileOpenBehavior,
+      faviconSrc: faviconSrc || undefined,
     });
-  }, [currentEngine.name, pageTitle, tileOpenBehavior, tileSize, tiles]);
+  }, [currentEngine.name, faviconSrc, pageTitle, tileOpenBehavior, tileSize, tiles]);
+
+  useEffect(() => {
+    let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.href = faviconSrc || "";
+  }, [faviconSrc]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -206,6 +218,11 @@ const App = () => {
     const defaults = getDefaultSettings();
     setPageTitle(defaults.pageTitle);
     setTiles(defaults.tiles);
+    setTileSize(defaults.tileSize);
+    setTileOpenBehavior(defaults.tileOpenBehavior);
+    setFaviconSrc("");
+    const defaultEngineIndex = engines.findIndex((e) => e.name === defaults.searchEngineName);
+    setEngineIndex(defaultEngineIndex >= 0 ? defaultEngineIndex : 0);
   };
 
   const openIconFilePicker = () => {
@@ -282,8 +299,13 @@ const App = () => {
         icon={<BarsIcon />}
         iconOnly
         aria-label="Open side panel"
-        styles={{ root: { position: "fixed", top: "1rem", left: "1rem" } }}
+        styles={{ root: { fontSize: "25px", position: "fixed", top: "0.6rem", left: "0.2rem" } }}
         onClick={openPanel}
+      />
+
+      <ThemeToggle
+        appearance="transparent"
+        className="theme-toggle-fixed"
       />
 
       <main className="page" role="main">
@@ -301,7 +323,7 @@ const App = () => {
           </Button>
 
           <input
-            type="search"
+            type="text"
             placeholder={currentEngine.placeholder}
             autoComplete="off"
             value={searchQuery}
@@ -315,6 +337,18 @@ const App = () => {
             aria-label={currentEngine.placeholder}
             required
           />
+
+          {searchQuery && (
+            <Button
+              type="button"
+              appearance="transparent"
+              icon={<CloseIcon aria-hidden="true" />}
+              iconOnly
+              hideChevron
+              aria-label="Clear search"
+              onClick={() => setSearchQuery("")}
+            />
+          )}
 
           <Button
             id="search-submit"
@@ -395,6 +429,21 @@ const App = () => {
             )}
           </div>
         </section>
+
+        <div className="add-tile-strip">
+          <Button
+            title="Add Tile"
+            type="button"
+            appearance="transparent"
+            icon={<PlusIcon />}
+            iconOnly
+            styles={{root: {fontSize: "50px"}}}
+            pressEffect={false}
+            aria-label="Add new tile"
+            className="add-tile-btn"
+            onClick={openAddModal}
+          />
+        </div>
       </main>
 
       <div className={`panel-overlay${isPanelOpen ? " open" : ""}`} onClick={closePanel}></div>
@@ -410,14 +459,6 @@ const App = () => {
           </Button>
         </div>
 
-        <Button
-          appearance="primary"
-          onClick={openAddModal}
-          className="panel-add-tile-btn"
-        >
-          Add new tile
-        </Button>
-
         <div className="panel-list-wrap">
           <h3>Settings</h3>
           <div className="settings-group">
@@ -432,6 +473,19 @@ const App = () => {
               value={pageTitle}
               onChange={(event) => setPageTitle(event.target.value)}
               placeholder="Home"
+            />
+          </div>
+          <div className="settings-group">
+            <label className="settings-label" htmlFor="favicon-input">
+              Tab icon URL
+            </label>
+            <input
+              id="favicon-input"
+              className="settings-input"
+              type="text"
+              value={faviconSrc}
+              onChange={(event) => setFaviconSrc(event.target.value)}
+              placeholder="https://example.com/icon.png"
             />
           </div>
           <Button
@@ -480,16 +534,6 @@ const App = () => {
               <option value="new">New tab</option>
             </select>
           </div>
-
-          <h3>Background</h3>
-          <ul className="panel-list">
-            <li>
-              Page color: <strong>#ffffff</strong>
-            </li>
-            <li>
-              Tile color mode: <strong>Custom per tile</strong>
-            </li>
-          </ul>
         </div>
       </aside>
 
