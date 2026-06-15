@@ -20,6 +20,7 @@ export type Settings = {
   searchEngineName: string;
   tiles: Tile[];
   tileSize: TileSize;
+  rowsPerPage: number;
   tileOpenBehavior: TileOpenBehavior;
   faviconSrc?: string;
 };
@@ -63,6 +64,7 @@ export const settingsStorageKey = "homepageSettings";
 export const defaultTileColor = "#dbeafe";
 export const defaultTileSize: TileSize = "medium";
 export const defaultTileOpenBehavior: TileOpenBehavior = "same";
+export const defaultRowsPerPage = 4;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null;
@@ -150,6 +152,7 @@ export const getDefaultSettings = (): Settings => {
     searchEngineName: engines[0].name,
     tiles: [...defaultTiles],
     tileSize: defaultTileSize,
+    rowsPerPage: defaultRowsPerPage,
     tileOpenBehavior: defaultTileOpenBehavior,
     faviconSrc: undefined,
   };
@@ -187,11 +190,20 @@ export const normalizeSettings = (value: unknown): Settings | null => {
       ? value.tileOpenBehavior
       : defaults.tileOpenBehavior;
 
+  const rowsPerPage =
+    typeof value.rowsPerPage === "number" &&
+    Number.isInteger(value.rowsPerPage) &&
+    value.rowsPerPage >= 1 &&
+    value.rowsPerPage <= 20
+      ? value.rowsPerPage
+      : defaults.rowsPerPage;
+
   return {
     pageTitle,
     searchEngineName,
     tiles: Array.isArray(value.tiles) ? tiles : defaults.tiles,
     tileSize,
+    rowsPerPage,
     tileOpenBehavior,
     faviconSrc:
       typeof value.faviconSrc === "string" && isImageSource(value.faviconSrc)

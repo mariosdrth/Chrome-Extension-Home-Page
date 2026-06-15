@@ -32,6 +32,7 @@ body {
   width: min(96vw, 1120px);
   margin: 0 auto 2rem;
   padding-top: 1.5rem;
+  padding-bottom: 4.5rem;
 }
 
 .theme-toggle-fixed {
@@ -137,6 +138,32 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
   gap: 0.9rem;
+}
+
+.page-dots {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pc-bg, #ffffff) 75%, transparent);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.page-dot-btn {
+  color: var(--pc-fg, #111827);
+}
+
+.page-dot-btn:hover,
+.page-dot-btn:focus-visible {
+  opacity: 1 !important;
 }
 
 .tiles-size-small {

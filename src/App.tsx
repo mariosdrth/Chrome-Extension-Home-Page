@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { SubmitEvent } from "react";
 import type { ChangeEvent } from "react";
-import { BarsIcon, Button, CloseIcon, RotateLeftIcon, PencilIcon, PlusIcon, SearchIcon, ThemeToggle } from "@polyutils/components";
+import { BarsIcon, Button, CircleFullIcon, CloseIcon, RotateLeftIcon, PencilIcon, PlusIcon, SearchIcon, ThemeToggle } from "@polyutils/components";
 import {
   defaultTileColor,
   defaultTileOpenBehavior,
+  defaultRowsPerPage,
   defaultTileSize,
   engines,
   getDefaultSettings,
@@ -34,6 +35,9 @@ const App = () => {
   const [tiles, setTiles] = useState<Tile[]>(initialSettings.tiles);
   const [pageTitle, setPageTitle] = useState(initialSettings.pageTitle);
   const [tileSize, setTileSize] = useState<TileSize>(initialSettings.tileSize ?? defaultTileSize);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(
+    initialSettings.rowsPerPage ?? defaultRowsPerPage
+  );
   const [tileOpenBehavior, setTileOpenBehavior] = useState<TileOpenBehavior>(
     initialSettings.tileOpenBehavior ?? defaultTileOpenBehavior
   );
@@ -52,10 +56,13 @@ const App = () => {
   const [tileIconInput, setTileIconInput] = useState("");
   const [tileError, setTileError] = useState("");
   const [settingsError, setSettingsError] = useState("");
+  const [gridColumns, setGridColumns] = useState(1);
+  const [currentPage, setCurrentPage] = useState(0);
 
   const modalNameInputRef = useRef<HTMLInputElement | null>(null);
   const iconFileInputRef = useRef<HTMLInputElement | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const tilesGridRef = useRef<HTMLDivElement | null>(null);
 
   const currentEngine = engines[engineIndex];
 
@@ -63,6 +70,7 @@ const App = () => {
     setPageTitle(settings.pageTitle);
     setTiles(settings.tiles);
     setTileSize(settings.tileSize);
+    setRowsPerPage(settings.rowsPerPage);
     setTileOpenBehavior(settings.tileOpenBehavior);
     setFaviconSrc(settings.faviconSrc ?? "");
     const nextEngineIndex = engines.findIndex((engine) => engine.name === settings.searchEngineName);
@@ -73,7 +81,7 @@ const App = () => {
     const normalizedTitle = pageTitle.trim() || "Home";
     document.title = normalizedTitle;
     writeSettings(buildCurrentSettings());
-  }, [currentEngine.name, faviconSrc, pageTitle, tileOpenBehavior, tileSize, tiles]);
+  }, [currentEngine.name, faviconSrc, pageTitle, rowsPerPage, tileOpenBehavior, tileSize, tiles]);
 
   useEffect(() => {
     let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
@@ -106,6 +114,42 @@ const App = () => {
       setTimeout(() => modalNameInputRef.current?.focus(), 0);
     }
   }, [isModalOpen]);
+
+  useEffect(() => {
+    const calculateColumns = () => {
+      if (!tilesGridRef.current) {
+        return;
+      }
+
+      const gridWidth = tilesGridRef.current.clientWidth;
+      const styles = window.getComputedStyle(tilesGridRef.current);
+      const columnGap = Number.parseFloat(styles.columnGap || "0") || 0;
+      const isMobile = window.innerWidth <= 640;
+      const minTileWidth = isMobile
+        ? tileSize === "small"
+          ? 96
+          : tileSize === "large"
+            ? 126
+            : 110
+        : 132;
+
+      const estimatedColumns = Math.floor((gridWidth + columnGap) / (minTileWidth + columnGap));
+      setGridColumns(Math.max(1, estimatedColumns));
+    };
+
+    calculateColumns();
+
+    const observer = new ResizeObserver(calculateColumns);
+    if (tilesGridRef.current) {
+      observer.observe(tilesGridRef.current);
+    }
+    window.addEventListener("resize", calculateColumns);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", calculateColumns);
+    };
+  }, [tileSize]);
 
   const openAddModal = () => {
     resetModalFields();
@@ -294,6 +338,16 @@ const App = () => {
 
   const modalTitle = editingTileIndex === null ? "Add shortcut" : "Edit shortcut";
 
+  const tilesPerPage = Math.max(1, rowsPerPage * gridColumns);
+  const totalPages = Math.max(1, Math.ceil(tiles.length / tilesPerPage));
+
+  useEffect(() => {
+    setCurrentPage((previous) => Math.min(previous, totalPages - 1));
+  }, [totalPages]);
+
+  const pageStartIndex = currentPage * tilesPerPage;
+  const visibleTiles = tiles.slice(pageStartIndex, pageStartIndex + tilesPerPage);
+
   const runSearch = () => {
     const query = searchQuery.trim();
     if (!query) {
@@ -338,6 +392,7 @@ const App = () => {
       searchEngineName: currentEngine.name,
       tiles,
       tileSize,
+      rowsPerPage,
       tileOpenBehavior,
       faviconSrc: faviconSrc || undefined,
     };
@@ -456,9 +511,10 @@ const App = () => {
         </div>
 
         <section className="tiles-grid-section" aria-label="Website shortcuts">
-          <div className={`tiles-grid tiles-size-${tileSize}`}>
+          <div ref={tilesGridRef} className={`tiles-grid tiles-size-${tileSize}`}>
             {(
-              tiles.map((tile, index) => {
+              visibleTiles.map((tile, pageIndex) => {
+                const index = pageStartIndex + pageIndex;
                 const iconBg = tile.bgColor;
                 const iconFg = getTextColorForBackground(iconBg);
                 const iconSrc = tile.iconSrc?.trim();
@@ -535,6 +591,32 @@ const App = () => {
         </div>
       </main>
 
+      {totalPages > 1 ? (
+        <nav className="page-dots" aria-label="Shortcut pages">
+          {Array.from({ length: totalPages }, (_, pageIndex) => (
+            <Button
+              key={`page-${pageIndex}`}
+              type="button"
+              appearance="transparent"
+              shape="circular"
+              size="small"
+              icon={<CircleFullIcon />}
+              iconOnly
+              pressEffect={false}
+              className="page-dot-btn"
+              aria-label={`Go to page ${pageIndex + 1}`}
+              aria-current={pageIndex === currentPage ? "page" : undefined}
+              styles={{
+                root: {
+                  opacity: pageIndex === currentPage ? 1 : 0.5,
+                },
+              }}
+              onClick={() => setCurrentPage(pageIndex)}
+            />
+          ))}
+        </nav>
+      ) : null}
+
       <div className={`panel-overlay${isPanelOpen ? " open" : ""}`} onClick={closePanel}></div>
       <aside className={`side-panel${isPanelOpen ? " open" : ""}`} aria-label="Menu panel">
         <Button
@@ -605,6 +687,29 @@ const App = () => {
               <option value="new">New tab</option>
             </select>
           </div>
+
+          <div className="settings-group">
+            <label className="settings-label" htmlFor="rows-per-page-input">
+              Rows per page
+            </label>
+            <input
+              id="rows-per-page-input"
+              className="settings-input"
+              type="number"
+              min={1}
+              max={20}
+              value={rowsPerPage}
+              onChange={(event) => {
+                const parsed = Number.parseInt(event.target.value, 10);
+                if (Number.isNaN(parsed)) {
+                  setRowsPerPage(defaultRowsPerPage);
+                  return;
+                }
+                setRowsPerPage(Math.min(20, Math.max(1, parsed)));
+              }}
+            />
+          </div>
+
           <div className="settings-group">
             <Button
               appearance="default"
