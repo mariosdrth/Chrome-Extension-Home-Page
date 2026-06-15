@@ -8,6 +8,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   publicDir: "public",
   plugins: [react()],
+  test: {
+    environment: "jsdom",
+    setupFiles: "./src/test.setup.ts",
+  },
   server: {
     open: "/newtab.html",
   },
