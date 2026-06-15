@@ -16,6 +16,7 @@ export type Tile = {
 
 export type TileSize = "small" | "medium" | "large";
 export type TileOpenBehavior = "same" | "new";
+export type ClockFormat = "12h" | "24h";
 
 export type Settings = {
   pageTitle: string;
@@ -25,6 +26,8 @@ export type Settings = {
   tileSize: TileSize;
   rowsPerPage: number;
   tileOpenBehavior: TileOpenBehavior;
+  showClock: boolean;
+  clockFormat: ClockFormat;
   faviconSrc?: string;
 };
 
@@ -163,6 +166,8 @@ export const getDefaultSettings = (): Settings => {
     tileSize: defaultTileSize,
     rowsPerPage: defaultRowsPerPage,
     tileOpenBehavior: defaultTileOpenBehavior,
+    showClock: true,
+    clockFormat: "24h",
     faviconSrc: undefined,
   };
 };
@@ -207,6 +212,13 @@ export const normalizeSettings = (value: unknown): Settings | null => {
       ? value.rowsPerPage
       : defaults.rowsPerPage;
 
+  const showClock = typeof value.showClock === "boolean" ? value.showClock : defaults.showClock;
+
+  const clockFormat: ClockFormat =
+    value.clockFormat === "12h" || value.clockFormat === "24h"
+      ? value.clockFormat
+      : defaults.clockFormat;
+
   return {
     pageTitle,
     searchEngineName,
@@ -218,6 +230,8 @@ export const normalizeSettings = (value: unknown): Settings | null => {
     tileSize,
     rowsPerPage,
     tileOpenBehavior,
+    showClock,
+    clockFormat,
     faviconSrc:
       typeof value.faviconSrc === "string" && isStoredImageSource(value.faviconSrc)
         ? value.faviconSrc

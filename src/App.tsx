@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { SubmitEvent } from "react";
 import type { ChangeEvent } from "react";
-import { BarsIcon, Button, CircleFullIcon, CloseIcon, RotateLeftIcon, PencilIcon, PlusIcon, SearchIcon, ThemeToggle, useTheme } from "@polyutils/components";
+import { BarsIcon, Button, CircleFullIcon, CloseIcon, RotateLeftIcon, PencilIcon, PlusIcon, Scrollbars, SearchIcon, ThemeToggle, useTheme } from "@polyutils/components";
 import {
   defaultTileColor,
   defaultTileOpenBehavior,
@@ -20,6 +20,7 @@ import {
   Tile,
   TileOpenBehavior,
   TileSize,
+  ClockFormat,
   writeSettings,
 } from "./AppStore";
 import { deleteImage, getImageBlob, isImageRef, saveImageFile } from "./ImageStore";
@@ -43,6 +44,8 @@ const App = () => {
   const [tileOpenBehavior, setTileOpenBehavior] = useState<TileOpenBehavior>(
     initialSettings.tileOpenBehavior ?? defaultTileOpenBehavior
   );
+  const [showClock, setShowClock] = useState<boolean>(initialSettings.showClock ?? true);
+  const [clockFormat, setClockFormat] = useState<ClockFormat>(initialSettings.clockFormat ?? "24h");
   const [faviconSrc, setFaviconSrc] = useState(initialSettings.faviconSrc ?? "");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -64,6 +67,7 @@ const App = () => {
   const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null);
   const [resolvedBackgroundSrc, setResolvedBackgroundSrc] = useState("");
   const [resolvedTileIconsByRef, setResolvedTileIconsByRef] = useState<Record<string, string>>({});
+  const [currentTime, setCurrentTime] = useState(() => new Date());
 
   const modalNameInputRef = useRef<HTMLInputElement | null>(null);
   const iconFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -83,6 +87,8 @@ const App = () => {
     setTileSize(settings.tileSize);
     setRowsPerPage(settings.rowsPerPage);
     setTileOpenBehavior(settings.tileOpenBehavior);
+    setShowClock(settings.showClock);
+    setClockFormat(settings.clockFormat);
     setFaviconSrc(settings.faviconSrc ?? "");
     const nextEngineIndex = engines.findIndex((engine) => engine.name === settings.searchEngineName);
     setEngineIndex(nextEngineIndex >= 0 ? nextEngineIndex : 0);
@@ -113,7 +119,7 @@ const App = () => {
     } catch {
       setSettingsError("Unable to save settings.");
     }
-  }, [backgroundImageSrc, currentEngine.name, faviconSrc, pageTitle, rowsPerPage, tileOpenBehavior, tileSize, tiles]);
+  }, [backgroundImageSrc, clockFormat, currentEngine.name, faviconSrc, pageTitle, rowsPerPage, showClock, tileOpenBehavior, tileSize, tiles]);
 
   useEffect(() => {
     const currentStoredImageRefs = collectStoredImageRefs();
@@ -285,6 +291,16 @@ const App = () => {
       setTimeout(() => modalNameInputRef.current?.focus(), 0);
     }
   }, [isModalOpen]);
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timerId);
+    };
+  }, []);
 
   useEffect(() => {
     const calculateColumns = () => {
@@ -641,6 +657,8 @@ const App = () => {
       tileSize,
       rowsPerPage,
       tileOpenBehavior,
+      showClock,
+      clockFormat,
       faviconSrc: faviconSrc || undefined,
     };
   };
@@ -874,6 +892,16 @@ const App = () => {
         </nav>
       ) : null}
 
+      {showClock ? (
+        <aside className="clock-widget" aria-live="polite" aria-label="Current time">
+          {currentTime.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: clockFormat === "12h",
+          })}
+        </aside>
+      ) : null}
+
       <div className={`panel-overlay${isPanelOpen ? " open" : ""}`} onClick={closePanel}></div>
       <aside className={`side-panel${isPanelOpen ? " open" : ""}`} aria-label="Menu panel">
         <Button
@@ -886,7 +914,8 @@ const App = () => {
         <div className="side-panel-header">
           <h2>Settings</h2>
         </div>
-        <div className="panel-list-wrap">
+        <Scrollbars scrollbarWidth="thin" style={{ height: "100%" }}>
+          <div className="panel-list-wrap">
           <div className="settings-group">
             <label className="settings-label" htmlFor="page-title-input">
               Page title
@@ -1009,6 +1038,34 @@ const App = () => {
             />
           </div>
 
+          <div className="settings-group-clock">
+            <label className="settings-label">
+              Show clock widget
+            </label>
+            <input
+              id="show-clock-input"
+              className="settings-checkbox"
+              type="checkbox"
+              checked={showClock}
+              onChange={(event) => setShowClock(event.target.checked)}
+            />
+          </div>
+
+          <div className="settings-group">
+            <label className="settings-label" htmlFor="clock-format-select">
+              Clock format
+            </label>
+            <select
+              id="clock-format-select"
+              className="settings-input"
+              value={clockFormat}
+              onChange={(event) => setClockFormat(event.target.value as ClockFormat)}
+            >
+              <option value="24h">24-hour</option>
+              <option value="12h">12-hour</option>
+            </select>
+          </div>
+
           <div className="settings-group">
             <Button
               appearance="default"
@@ -1046,7 +1103,8 @@ const App = () => {
               </p>
             ) : null}
           </div>
-        </div>
+          </div>
+        </Scrollbars>
       </aside>
 
       <div id="tile-modal" className={`modal${isModalOpen ? " open" : ""}`} aria-hidden={isModalOpen ? "false" : "true"}>
