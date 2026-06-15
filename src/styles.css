@@ -154,10 +154,6 @@ body {
   padding: 0.9rem 0.6rem 0.7rem;
 }
 
-.tile:hover {
-  background: var(--surface);
-}
-
 .tile-icon {
   width: 68px;
   height: 68px;
@@ -201,16 +197,6 @@ body {
   font-size: 1.7rem;
 }
 
-.tile-label {
-  width: 100%;
-  text-align: center;
-  font-size: 0.92rem;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .tile-remove {
   position: absolute;
   top: 0.3rem;
@@ -250,15 +236,6 @@ body {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-}
-
-.empty-state {
-  margin: 0;
-  padding: 1rem;
-  border: 1px dashed var(--border);
-  border-radius: 0.6rem;
-  color: var(--muted);
-  text-align: center;
 }
 
 .modal {
@@ -400,12 +377,6 @@ body {
   font-size: 1.05rem;
 }
 
-.panel-list-wrap h3 {
-  margin: 0.45rem 0 0.35rem;
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-
 .settings-group {
   display: grid;
   gap: 0.35rem;
@@ -426,10 +397,6 @@ body {
   outline: none;
   background: var(--pc-field-bg);
   color: var(--pc-fg);
-}
-
-.restore-defaults-btn {
-  margin-bottom: 0.75rem;
 }
 
 .panel-list {
