@@ -38,7 +38,7 @@ body {
   position: fixed;
   top: 0.6rem;
   right: 0.2rem;
-  z-index: 100;
+  z-index: 15;
 }
 
 .add-tile-strip {
@@ -265,7 +265,7 @@ body {
   position: fixed;
   inset: 0;
   display: none;
-  z-index: 20;
+  z-index: 30;
 }
 
 .modal.open {
@@ -283,8 +283,8 @@ body {
   width: min(92vw, 420px);
   margin: 12vh auto 0;
   border-radius: 0.8rem;
-  border: 1px solid var(--border);
-  background: #ffffff;
+  border: 1px solid var(--pc-border);
+  background: var(--pc-bg);
   padding: 1rem;
 }
 
@@ -326,9 +326,11 @@ body {
 }
 
 .icon-picker-row {
+  margin-top: 0.5rem;
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+  justify-content: space-between;
 }
 
 .icon-hint {
@@ -390,6 +392,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 0.5rem;
 }
 
 .side-panel-header h2 {

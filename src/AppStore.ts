@@ -147,7 +147,6 @@ export const getDefaultSettings = (): Settings => {
     tiles: [...defaultTiles],
     tileSize: defaultTileSize,
     tileOpenBehavior: defaultTileOpenBehavior,
-    faviconSrc: undefined,
   };
 };
 
@@ -191,10 +190,6 @@ export const readSettings = (): Settings => {
       tiles: Array.isArray(parsed.tiles) ? tiles : defaults.tiles,
       tileSize,
       tileOpenBehavior,
-      faviconSrc:
-        typeof parsed.faviconSrc === "string" && isImageSource(parsed.faviconSrc)
-          ? parsed.faviconSrc
-          : undefined,
     };
   } catch {
     return defaults;

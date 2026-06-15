@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { FormEvent } from "react";
 import type { ChangeEvent } from "react";
-import { BarsIcon, Button, CloseIcon, PencilIcon, PlusIcon, SearchIcon, ThemeToggle } from "@polyutils/components";
+import { BarsIcon, Button, CloseIcon, RotateLeftIcon, PencilIcon, PlusIcon, SearchIcon, ThemeToggle } from "@polyutils/components";
 import {
   defaultTileColor,
   defaultTileOpenBehavior,
@@ -22,6 +22,8 @@ import {
 } from "./AppStore";
 
 const App = () => {
+  type ConfirmAction = "remove-tile" | "restore-defaults";
+
   const [initialSettings] = useState<Settings>(() => readSettings());
   const initialIndex = engines.findIndex(
     (engine) => engine.name === initialSettings.searchEngineName
@@ -40,6 +42,7 @@ const App = () => {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [deleteTargetIndex, setDeleteTargetIndex] = useState<number | null>(null);
   const [editingTileIndex, setEditingTileIndex] = useState<number | null>(null);
   const [tileNameInput, setTileNameInput] = useState("");
@@ -197,32 +200,41 @@ const App = () => {
     setTiles((previous) => previous.filter((_, tileIndex) => tileIndex !== index));
   };
 
-  const askRemoveTile = (index: number) => {
-    setDeleteTargetIndex(index);
+  const openConfirmDialog = (action: ConfirmAction, targetIndex: number | null = null) => {
+    setConfirmAction(action);
+    setDeleteTargetIndex(targetIndex);
     setIsDeleteConfirmOpen(true);
   };
 
+  const askRemoveTile = (index: number) => {
+    openConfirmDialog("remove-tile", index);
+  };
+
+  const askRestoreDefaults = () => {
+    openConfirmDialog("restore-defaults");
+  };
+
   const cancelRemoveTile = () => {
+    setConfirmAction(null);
     setIsDeleteConfirmOpen(false);
     setDeleteTargetIndex(null);
   };
 
   const confirmRemoveTile = () => {
-    if (deleteTargetIndex !== null) {
+    if (confirmAction === "remove-tile" && deleteTargetIndex !== null) {
       removeTile(deleteTargetIndex);
     }
+    if (confirmAction === "restore-defaults") {
+      const defaults = getDefaultSettings();
+      setPageTitle(defaults.pageTitle);
+      setTiles(defaults.tiles);
+      setTileSize(defaults.tileSize);
+      setTileOpenBehavior(defaults.tileOpenBehavior);
+      setFaviconSrc("");
+      const defaultEngineIndex = engines.findIndex((e) => e.name === defaults.searchEngineName);
+      setEngineIndex(defaultEngineIndex >= 0 ? defaultEngineIndex : 0);
+    }
     cancelRemoveTile();
-  };
-
-  const restoreDefaults = () => {
-    const defaults = getDefaultSettings();
-    setPageTitle(defaults.pageTitle);
-    setTiles(defaults.tiles);
-    setTileSize(defaults.tileSize);
-    setTileOpenBehavior(defaults.tileOpenBehavior);
-    setFaviconSrc("");
-    const defaultEngineIndex = engines.findIndex((e) => e.name === defaults.searchEngineName);
-    setEngineIndex(defaultEngineIndex >= 0 ? defaultEngineIndex : 0);
   };
 
   const openIconFilePicker = () => {
@@ -240,6 +252,9 @@ const App = () => {
       event.target.value = "";
       return;
     }
+
+    // Clear any typed URL immediately when switching to a local file icon.
+    setTileIconInput("");
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -292,6 +307,14 @@ const App = () => {
       ? tiles[deleteTargetIndex].name
       : "this tile";
 
+  const confirmTitle = confirmAction === "restore-defaults" ? "Restore defaults" : "Remove tile";
+  const confirmMessage =
+    confirmAction === "restore-defaults"
+      ? "Are you sure you want to restore defaults? This will reset all your settings and shortcuts."
+      : `Are you sure you want to remove ${deleteTargetName}?`;
+  const confirmButtonLabel = confirmAction === "restore-defaults" ? "Restore" : "Remove";
+  const isLocalIconSelected = tileIconInput.startsWith("data:image/");
+
   return (
     <>
       <Button
@@ -340,11 +363,9 @@ const App = () => {
 
           {searchQuery && (
             <Button
-              type="button"
               appearance="transparent"
               icon={<CloseIcon aria-hidden="true" />}
               iconOnly
-              hideChevron
               aria-label="Clear search"
               onClick={() => setSearchQuery("")}
             />
@@ -352,19 +373,16 @@ const App = () => {
 
           <Button
             id="search-submit"
-            type="button"
             appearance="transparent"
-            icon={<SearchIcon className="search-submit-icon" aria-hidden="true" />}
+            icon={<SearchIcon aria-hidden="true" />}
             iconOnly
-            hideChevron
             aria-label="Search"
-            className="search-submit-btn"
             onClick={runSearch}
           />
         </div>
 
         <section aria-label="Website shortcuts">
-          <div id="tiles-grid" className={`tiles-grid tiles-size-${tileSize}`}>
+          <div className={`tiles-grid tiles-size-${tileSize}`}>
             {(
               tiles.map((tile, index) => {
                 const iconBg = tile.bgColor;
@@ -396,7 +414,6 @@ const App = () => {
                     </span>
                     <span className="tile-label">{tile.name}</span>
                     <Button
-                      type="button"
                       appearance="transparent"
                       size="small"
                       icon={<PencilIcon />}
@@ -410,7 +427,6 @@ const App = () => {
                       }}
                     />
                     <Button
-                      type="button"
                       appearance="transparent"
                       size="small"
                       icon={<CloseIcon />}
@@ -433,7 +449,6 @@ const App = () => {
         <div className="add-tile-strip">
           <Button
             title="Add Tile"
-            type="button"
             appearance="transparent"
             icon={<PlusIcon />}
             iconOnly
@@ -448,19 +463,17 @@ const App = () => {
 
       <div className={`panel-overlay${isPanelOpen ? " open" : ""}`} onClick={closePanel}></div>
       <aside className={`side-panel${isPanelOpen ? " open" : ""}`} aria-label="Menu panel">
-        <div className="side-panel-header">
-          <h2>Menu</h2>
-          <Button
+        <Button
             appearance="transparent"
-            hideChevron
+            icon={<CloseIcon />}
+            iconOnly
+            styles={{ root: { fontSize: "20px", padding: "0", position: "fixed", top: "0.2rem", right: "0.2rem" } }}
             onClick={closePanel}
-          >
-            Close
-          </Button>
+          />
+        <div className="side-panel-header">
+          <h2>Settings</h2>
         </div>
-
         <div className="panel-list-wrap">
-          <h3>Settings</h3>
           <div className="settings-group">
             <label className="settings-label" htmlFor="page-title-input">
               Page title
@@ -488,22 +501,6 @@ const App = () => {
               placeholder="https://example.com/icon.png"
             />
           </div>
-          <Button
-            appearance="outline"
-            className="restore-defaults-btn"
-            onClick={restoreDefaults}
-          >
-            Restore defaults
-          </Button>
-          <ul className="panel-list">
-            <li>
-              Search engine: <strong>{currentEngine.name}</strong>
-            </li>
-            <li>
-              Tiles: <strong>{tiles.length}</strong>
-            </li>
-          </ul>
-
           <div className="settings-group">
             <label className="settings-label" htmlFor="tile-size-select">
               Tile size
@@ -534,6 +531,16 @@ const App = () => {
               <option value="new">New tab</option>
             </select>
           </div>
+          <div className="settings-group">
+            <Button
+              appearance="default"
+              icon={<RotateLeftIcon />}
+              styles={{ root: { marginTop: "1rem", width: "85%", justifySelf: "center" } }}
+              onClick={askRestoreDefaults}
+            >
+              Restore defaults
+          </Button>
+          </div>
         </div>
       </aside>
 
@@ -547,11 +554,10 @@ const App = () => {
         >
           <h2 id="tile-modal-title">{modalTitle}</h2>
           <form className="tile-form" onSubmit={handleSaveTile}>
-            <label htmlFor="tile-name">Name</label>
+            <label htmlFor="tile-name">Tile Name</label>
             <input
               ref={modalNameInputRef}
               id="tile-name"
-              name="name"
               type="text"
               maxLength={40}
               value={tileNameInput}
@@ -571,7 +577,7 @@ const App = () => {
               required
             />
 
-            <label htmlFor="tile-color">Tile color</label>
+            <label htmlFor="tile-color">Tile Color</label>
             <input
               id="tile-color"
               name="color"
@@ -581,21 +587,22 @@ const App = () => {
               className="color-picker"
             />
 
-            <label htmlFor="tile-icon">Icon URL (optional)</label>
+            <label htmlFor="tile-icon">Icon URL</label>
             <input
               id="tile-icon"
               name="icon"
               type="text"
-              value={tileIconInput.startsWith("data:image/") ? "" : tileIconInput}
+              value={isLocalIconSelected ? "" : tileIconInput}
               onChange={(event) => setTileIconInput(event.target.value)}
+              disabled={isLocalIconSelected}
               placeholder="https://example.com/icon.png"
             />
 
             <div className="icon-picker-row">
-              <Button type="button" appearance="outline" onClick={openIconFilePicker}>
+              <Button appearance="default" shape="square" onClick={openIconFilePicker}>
                 Choose icon from device
               </Button>
-              <Button type="button" appearance="subtle" onClick={() => setTileIconInput("")}>
+              <Button appearance="outline" shape="square" onClick={() => setTileIconInput("")}>
                 Clear icon
               </Button>
               <input
@@ -607,7 +614,7 @@ const App = () => {
                 onChange={handleIconFileChange}
               />
             </div>
-            {tileIconInput.startsWith("data:image/") ? (
+            {isLocalIconSelected ? (
               <p className="icon-hint">Using local image file icon.</p>
             ) : null}
 
@@ -632,15 +639,15 @@ const App = () => {
         aria-hidden={isDeleteConfirmOpen ? "false" : "true"}
       >
         <div className="modal-backdrop" onClick={cancelRemoveTile}></div>
-        <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirm-remove-title">
-          <h2 id="confirm-remove-title">Remove tile</h2>
-          <p className="confirm-message">Are you sure you want to remove {deleteTargetName}?</p>
+        <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirm-action-title">
+          <h2 id="confirm-action-title">{confirmTitle}</h2>
+          <p className="confirm-message">{confirmMessage}</p>
           <div className="modal-actions">
-            <Button type="button" appearance="subtle" onClick={cancelRemoveTile}>
+            <Button appearance="subtle" onClick={cancelRemoveTile}>
               Cancel
             </Button>
-            <Button type="button" appearance="danger" onClick={confirmRemoveTile}>
-              Remove
+            <Button appearance="danger" onClick={confirmRemoveTile}>
+              {confirmButtonLabel}
             </Button>
           </div>
         </section>
