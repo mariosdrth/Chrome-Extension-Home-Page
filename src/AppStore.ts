@@ -46,11 +46,15 @@ export const engines: Engine[] = [
 ];
 
 const defaultTiles: Tile[] = [
-  { name: "YouTube", url: "https://www.youtube.com", bgColor: "#dbeafe" },
+  { name: "YouTube", url: "https://www.youtube.com", bgColor: "#fee2e2" },
   { name: "Gmail", url: "https://mail.google.com", bgColor: "#dcfce7" },
-  { name: "Drive", url: "https://drive.google.com", bgColor: "#fee2e2" },
-  { name: "GitHub", url: "https://github.com", bgColor: "#ede9fe" },
+  { name: "Yahoo Mail", url: "https://mail.yahoo.com", bgColor: "#ede9fe" },
+  { name: "Drive", url: "https://drive.google.com", bgColor: "#dbeafe" },
   { name: "Wikipedia", url: "https://www.wikipedia.org", bgColor: "#fef3c7" },
+  { name: "eBay", url: "https://www.ebay.com", bgColor: "#fef3c7" },
+  { name: "Amazon", url: "https://www.amazon.com", bgColor: "#fed7aa" },
+  { name: "X", url: "https://www.x.com", bgColor: "#e0f2fe" },
+  { name: "Facebook", url: "https://www.facebook.com", bgColor: "#dbeafe" },
 ];
 
 const fallbackTileColors = ["#dbeafe", "#dcfce7", "#fee2e2", "#ede9fe", "#fef3c7", "#e0f2fe"];
@@ -147,6 +151,52 @@ export const getDefaultSettings = (): Settings => {
     tiles: [...defaultTiles],
     tileSize: defaultTileSize,
     tileOpenBehavior: defaultTileOpenBehavior,
+    faviconSrc: undefined,
+  };
+};
+
+export const normalizeSettings = (value: unknown): Settings | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const defaults = getDefaultSettings();
+
+  const pageTitle =
+    typeof value.pageTitle === "string" && value.pageTitle.trim()
+      ? value.pageTitle
+      : defaults.pageTitle;
+
+  const searchEngineName =
+    typeof value.searchEngineName === "string" &&
+    engines.some((engine) => engine.name === value.searchEngineName)
+      ? value.searchEngineName
+      : defaults.searchEngineName;
+
+  const tiles = Array.isArray(value.tiles)
+    ? value.tiles.map(normalizeTile).filter((tile): tile is Tile => tile !== null)
+    : defaults.tiles;
+
+  const tileSize: TileSize =
+    value.tileSize === "small" || value.tileSize === "large" || value.tileSize === "medium"
+      ? value.tileSize
+      : defaults.tileSize;
+
+  const tileOpenBehavior: TileOpenBehavior =
+    value.tileOpenBehavior === "new" || value.tileOpenBehavior === "same"
+      ? value.tileOpenBehavior
+      : defaults.tileOpenBehavior;
+
+  return {
+    pageTitle,
+    searchEngineName,
+    tiles: Array.isArray(value.tiles) ? tiles : defaults.tiles,
+    tileSize,
+    tileOpenBehavior,
+    faviconSrc:
+      typeof value.faviconSrc === "string" && isImageSource(value.faviconSrc)
+        ? value.faviconSrc
+        : undefined,
   };
 };
 
@@ -155,42 +205,7 @@ export const readSettings = (): Settings => {
 
   try {
     const parsed = JSON.parse(localStorage.getItem(settingsStorageKey) ?? "null") as unknown;
-    if (!isRecord(parsed)) {
-      return defaults;
-    }
-
-    const pageTitle =
-      typeof parsed.pageTitle === "string" && parsed.pageTitle.trim()
-        ? parsed.pageTitle
-        : defaults.pageTitle;
-
-    const searchEngineName =
-      typeof parsed.searchEngineName === "string" &&
-      engines.some((engine) => engine.name === parsed.searchEngineName)
-        ? parsed.searchEngineName
-        : defaults.searchEngineName;
-
-    const tiles = Array.isArray(parsed.tiles)
-      ? parsed.tiles.map(normalizeTile).filter((tile): tile is Tile => tile !== null)
-      : defaults.tiles;
-
-    const tileSize: TileSize =
-      parsed.tileSize === "small" || parsed.tileSize === "large" || parsed.tileSize === "medium"
-        ? parsed.tileSize
-        : defaults.tileSize;
-
-    const tileOpenBehavior: TileOpenBehavior =
-      parsed.tileOpenBehavior === "new" || parsed.tileOpenBehavior === "same"
-        ? parsed.tileOpenBehavior
-        : defaults.tileOpenBehavior;
-
-    return {
-      pageTitle,
-      searchEngineName,
-      tiles: Array.isArray(parsed.tiles) ? tiles : defaults.tiles,
-      tileSize,
-      tileOpenBehavior,
-    };
+    return normalizeSettings(parsed) ?? defaults;
   } catch {
     return defaults;
   }

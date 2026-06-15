@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { FormEvent } from "react";
+import type { SubmitEvent } from "react";
 import type { ChangeEvent } from "react";
 import { BarsIcon, Button, CloseIcon, RotateLeftIcon, PencilIcon, PlusIcon, SearchIcon, ThemeToggle } from "@polyutils/components";
 import {
@@ -13,6 +13,7 @@ import {
   isHexColor,
   isImageSource,
   normalizeUrl,
+  normalizeSettings,
   readSettings,
   Settings,
   Tile,
@@ -50,23 +51,28 @@ const App = () => {
   const [tileColorInput, setTileColorInput] = useState(defaultTileColor);
   const [tileIconInput, setTileIconInput] = useState("");
   const [tileError, setTileError] = useState("");
+  const [settingsError, setSettingsError] = useState("");
 
   const modalNameInputRef = useRef<HTMLInputElement | null>(null);
   const iconFileInputRef = useRef<HTMLInputElement | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const currentEngine = engines[engineIndex];
+
+  const applySettings = (settings: Settings) => {
+    setPageTitle(settings.pageTitle);
+    setTiles(settings.tiles);
+    setTileSize(settings.tileSize);
+    setTileOpenBehavior(settings.tileOpenBehavior);
+    setFaviconSrc(settings.faviconSrc ?? "");
+    const nextEngineIndex = engines.findIndex((engine) => engine.name === settings.searchEngineName);
+    setEngineIndex(nextEngineIndex >= 0 ? nextEngineIndex : 0);
+  };
 
   useEffect(() => {
     const normalizedTitle = pageTitle.trim() || "Home";
     document.title = normalizedTitle;
-    writeSettings({
-      pageTitle: normalizedTitle,
-      searchEngineName: currentEngine.name,
-      tiles,
-      tileSize,
-      tileOpenBehavior,
-      faviconSrc: faviconSrc || undefined,
-    });
+    writeSettings(buildCurrentSettings());
   }, [currentEngine.name, faviconSrc, pageTitle, tileOpenBehavior, tileSize, tiles]);
 
   useEffect(() => {
@@ -144,7 +150,7 @@ const App = () => {
     resetModalFields();
   };
 
-  const handleSaveTile = (event: FormEvent<HTMLFormElement>) => {
+  const handleSaveTile = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setTileError("");
 
@@ -226,15 +232,26 @@ const App = () => {
     }
     if (confirmAction === "restore-defaults") {
       const defaults = getDefaultSettings();
-      setPageTitle(defaults.pageTitle);
-      setTiles(defaults.tiles);
-      setTileSize(defaults.tileSize);
-      setTileOpenBehavior(defaults.tileOpenBehavior);
-      setFaviconSrc("");
-      const defaultEngineIndex = engines.findIndex((e) => e.name === defaults.searchEngineName);
-      setEngineIndex(defaultEngineIndex >= 0 ? defaultEngineIndex : 0);
+      applySettings(defaults);
+      setSettingsError("");
     }
     cancelRemoveTile();
+  };
+
+  const suggestIconFromUrl = (rawUrl: string) => {
+    if (tileIconInput) {
+      return;
+    }
+    const normalized = normalizeUrl(rawUrl);
+    if (!normalized) {
+      return;
+    }
+    try {
+      const { hostname } = new URL(normalized);
+      setTileIconInput(`https://www.google.com/s2/favicons?domain=${hostname}&sz=64`);
+    } catch {
+      // ignore invalid URL
+    }
   };
 
   const openIconFilePicker = () => {
@@ -315,6 +332,63 @@ const App = () => {
   const confirmButtonLabel = confirmAction === "restore-defaults" ? "Restore" : "Remove";
   const isLocalIconSelected = tileIconInput.startsWith("data:image/");
 
+  const buildCurrentSettings = (): Settings => {
+    return {
+      pageTitle: pageTitle.trim() || "Home",
+      searchEngineName: currentEngine.name,
+      tiles,
+      tileSize,
+      tileOpenBehavior,
+      faviconSrc: faviconSrc || undefined,
+    };
+  };
+
+  const exportSettings = () => {
+    const settings = buildCurrentSettings();
+    const blob = new Blob([`${JSON.stringify(settings, null, 2)}\n`], { type: "application/json" });
+    const fileUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = fileUrl;
+    link.download = "homepage-settings.json";
+    link.click();
+    URL.revokeObjectURL(fileUrl);
+  };
+
+  const openImportSettingsPicker = () => {
+    importFileInputRef.current?.click();
+  };
+
+  const handleImportSettingsChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0];
+    if (!selected) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const contents = typeof reader.result === "string" ? reader.result : "";
+      try {
+        const importedSettings = normalizeSettings(JSON.parse(contents) as unknown);
+        if (!importedSettings) {
+          setSettingsError("The selected file does not contain valid settings.");
+          return;
+        }
+
+        applySettings(importedSettings);
+        setSettingsError("");
+        setIsPanelOpen(false);
+      } catch {
+        setSettingsError("The selected file is not valid JSON.");
+      }
+    };
+    reader.onerror = () => {
+      setSettingsError("Unable to read the selected file.");
+    };
+
+    reader.readAsText(selected);
+    event.target.value = "";
+  };
+
   return (
     <>
       <Button
@@ -381,7 +455,7 @@ const App = () => {
           />
         </div>
 
-        <section aria-label="Website shortcuts">
+        <section className="tiles-grid-section" aria-label="Website shortcuts">
           <div className={`tiles-grid tiles-size-${tileSize}`}>
             {(
               tiles.map((tile, index) => {
@@ -539,7 +613,34 @@ const App = () => {
               onClick={askRestoreDefaults}
             >
               Restore defaults
-          </Button>
+            </Button>
+            <Button
+              appearance="default"
+              styles={{ root: { width: "85%", justifySelf: "center" } }}
+              onClick={exportSettings}
+            >
+              Export settings
+            </Button>
+            <Button
+              appearance="default"
+              styles={{ root: { width: "85%", justifySelf: "center" } }}
+              onClick={openImportSettingsPicker}
+            >
+              Import settings
+            </Button>
+            <input
+              ref={importFileInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="sr-only"
+              tabIndex={-1}
+              onChange={handleImportSettingsChange}
+            />
+            {settingsError ? (
+              <p className="form-error" role="alert">
+                {settingsError}
+              </p>
+            ) : null}
           </div>
         </div>
       </aside>
@@ -574,6 +675,7 @@ const App = () => {
               autoComplete="off"
               value={tileUrlInput}
               onChange={(event) => setTileUrlInput(event.target.value)}
+              onBlur={(event) => suggestIconFromUrl(event.target.value)}
               required
             />
 
@@ -602,7 +704,7 @@ const App = () => {
               <Button appearance="default" shape="square" onClick={openIconFilePicker}>
                 Choose icon from device
               </Button>
-              <Button appearance="outline" shape="square" onClick={() => setTileIconInput("")}>
+              <Button appearance="outline" shape="square" disabled={!isLocalIconSelected} onClick={() => setTileIconInput("")}>
                 Clear icon
               </Button>
               <input
