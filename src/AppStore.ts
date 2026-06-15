@@ -5,6 +5,8 @@ export type Engine = {
   icon: string;
 };
 
+import { isImageRef } from "./ImageStore";
+
 export type Tile = {
   name: string;
   url: string;
@@ -18,6 +20,7 @@ export type TileOpenBehavior = "same" | "new";
 export type Settings = {
   pageTitle: string;
   searchEngineName: string;
+  backgroundImageSrc?: string;
   tiles: Tile[];
   tileSize: TileSize;
   rowsPerPage: number;
@@ -85,7 +88,12 @@ export const isHexColor = (value: string): boolean => {
 
 export const isImageSource = (value: string): boolean => {
   const trimmed = value.trim();
-  return isHttpUrl(trimmed) || trimmed.startsWith("data:image/");
+  return isHttpUrl(trimmed);
+};
+
+export const isStoredImageSource = (value: string): boolean => {
+  const trimmed = value.trim();
+  return isImageSource(trimmed) || isImageRef(trimmed);
 };
 
 export const normalizeUrl = (rawValue: string): string | null => {
@@ -141,7 +149,7 @@ const normalizeTile = (rawTile: unknown): Tile | null => {
         ? rawTile.icon.trim()
         : "";
 
-  const iconSrc = isImageSource(rawIconSource) ? rawIconSource : undefined;
+  const iconSrc = isStoredImageSource(rawIconSource) ? rawIconSource : undefined;
 
   return { name, url: normalizedUrl, bgColor, iconSrc };
 };
@@ -150,6 +158,7 @@ export const getDefaultSettings = (): Settings => {
   return {
     pageTitle: "Home",
     searchEngineName: engines[0].name,
+    backgroundImageSrc: undefined,
     tiles: [...defaultTiles],
     tileSize: defaultTileSize,
     rowsPerPage: defaultRowsPerPage,
@@ -201,12 +210,16 @@ export const normalizeSettings = (value: unknown): Settings | null => {
   return {
     pageTitle,
     searchEngineName,
+    backgroundImageSrc:
+      typeof value.backgroundImageSrc === "string" && isStoredImageSource(value.backgroundImageSrc)
+        ? value.backgroundImageSrc
+        : undefined,
     tiles: Array.isArray(value.tiles) ? tiles : defaults.tiles,
     tileSize,
     rowsPerPage,
     tileOpenBehavior,
     faviconSrc:
-      typeof value.faviconSrc === "string" && isImageSource(value.faviconSrc)
+      typeof value.faviconSrc === "string" && isStoredImageSource(value.faviconSrc)
         ? value.faviconSrc
         : undefined,
   };

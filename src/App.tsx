@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { SubmitEvent } from "react";
 import type { ChangeEvent } from "react";
-import { BarsIcon, Button, CircleFullIcon, CloseIcon, RotateLeftIcon, PencilIcon, PlusIcon, SearchIcon, ThemeToggle } from "@polyutils/components";
+import { BarsIcon, Button, CircleFullIcon, CloseIcon, RotateLeftIcon, PencilIcon, PlusIcon, SearchIcon, ThemeToggle, useTheme } from "@polyutils/components";
 import {
   defaultTileColor,
   defaultTileOpenBehavior,
@@ -12,7 +12,7 @@ import {
   getDefaultSettings,
   getTextColorForBackground,
   isHexColor,
-  isImageSource,
+  isStoredImageSource,
   normalizeUrl,
   normalizeSettings,
   readSettings,
@@ -22,6 +22,7 @@ import {
   TileSize,
   writeSettings,
 } from "./AppStore";
+import { deleteImage, getImageBlob, isImageRef, saveImageFile } from "./ImageStore";
 
 const App = () => {
   type ConfirmAction = "remove-tile" | "restore-defaults";
@@ -34,6 +35,7 @@ const App = () => {
   const [engineIndex, setEngineIndex] = useState(initialIndex >= 0 ? initialIndex : 0);
   const [tiles, setTiles] = useState<Tile[]>(initialSettings.tiles);
   const [pageTitle, setPageTitle] = useState(initialSettings.pageTitle);
+  const [backgroundImageSrc, setBackgroundImageSrc] = useState(initialSettings.backgroundImageSrc ?? "");
   const [tileSize, setTileSize] = useState<TileSize>(initialSettings.tileSize ?? defaultTileSize);
   const [rowsPerPage, setRowsPerPage] = useState<number>(
     initialSettings.rowsPerPage ?? defaultRowsPerPage
@@ -60,16 +62,23 @@ const App = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
   const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null);
+  const [resolvedBackgroundSrc, setResolvedBackgroundSrc] = useState("");
+  const [resolvedTileIconsByRef, setResolvedTileIconsByRef] = useState<Record<string, string>>({});
 
   const modalNameInputRef = useRef<HTMLInputElement | null>(null);
   const iconFileInputRef = useRef<HTMLInputElement | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const backgroundFileInputRef = useRef<HTMLInputElement | null>(null);
   const tilesGridRef = useRef<HTMLDivElement | null>(null);
+  const tileIconObjectUrlsRef = useRef<Record<string, string>>({});
+  const previousStoredImageRefsRef = useRef<Set<string>>(new Set());
 
   const currentEngine = engines[engineIndex];
+  const { theme } = useTheme();
 
   const applySettings = (settings: Settings) => {
     setPageTitle(settings.pageTitle);
+    setBackgroundImageSrc(settings.backgroundImageSrc ?? "");
     setTiles(settings.tiles);
     setTileSize(settings.tileSize);
     setRowsPerPage(settings.rowsPerPage);
@@ -79,11 +88,171 @@ const App = () => {
     setEngineIndex(nextEngineIndex >= 0 ? nextEngineIndex : 0);
   };
 
+  const collectStoredImageRefs = () => {
+    const refs = new Set<string>();
+
+    if (isImageRef(backgroundImageSrc)) {
+      refs.add(backgroundImageSrc.trim());
+    }
+
+    for (const tile of tiles) {
+      const iconSrc = tile.iconSrc?.trim();
+      if (iconSrc && isImageRef(iconSrc)) {
+        refs.add(iconSrc);
+      }
+    }
+
+    return refs;
+  };
+
   useEffect(() => {
     const normalizedTitle = pageTitle.trim() || "Home";
     document.title = normalizedTitle;
-    writeSettings(buildCurrentSettings());
-  }, [currentEngine.name, faviconSrc, pageTitle, rowsPerPage, tileOpenBehavior, tileSize, tiles]);
+    try {
+      writeSettings(buildCurrentSettings());
+    } catch {
+      setSettingsError("Unable to save settings.");
+    }
+  }, [backgroundImageSrc, currentEngine.name, faviconSrc, pageTitle, rowsPerPage, tileOpenBehavior, tileSize, tiles]);
+
+  useEffect(() => {
+    const currentStoredImageRefs = collectStoredImageRefs();
+    const previousStoredImageRefs = previousStoredImageRefsRef.current;
+    previousStoredImageRefsRef.current = currentStoredImageRefs;
+
+    void Promise.all(
+      Array.from(previousStoredImageRefs)
+        .filter((ref) => !currentStoredImageRefs.has(ref))
+        .map((ref) => deleteImage(ref))
+    ).catch(() => {
+      // Best-effort cleanup only.
+    });
+  }, [backgroundImageSrc, tiles]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrlToRevoke = "";
+
+    const resolveBackground = async () => {
+      const normalized = backgroundImageSrc.trim();
+      if (!normalized) {
+        setResolvedBackgroundSrc("");
+        return;
+      }
+
+      if (!isImageRef(normalized)) {
+        setResolvedBackgroundSrc(normalized);
+        return;
+      }
+
+      const blob = await getImageBlob(normalized);
+      if (cancelled) {
+        return;
+      }
+
+      if (!blob) {
+        setResolvedBackgroundSrc("");
+        return;
+      }
+
+      objectUrlToRevoke = URL.createObjectURL(blob);
+      setResolvedBackgroundSrc(objectUrlToRevoke);
+    };
+
+    void resolveBackground();
+
+    return () => {
+      cancelled = true;
+      if (objectUrlToRevoke) {
+        URL.revokeObjectURL(objectUrlToRevoke);
+      }
+    };
+  }, [backgroundImageSrc]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
+
+    if (!resolvedBackgroundSrc.trim()) {
+      body.classList.remove("has-custom-background");
+      root.style.backgroundImage = "";
+      root.style.backgroundSize = "";
+      root.style.backgroundPosition = "";
+      root.style.backgroundRepeat = "";
+      return;
+    }
+
+    const escapedSrc = resolvedBackgroundSrc.replace(/"/g, '\\"');
+    body.classList.add("has-custom-background");
+    root.style.backgroundImage = `url("${escapedSrc}")`;
+    root.style.backgroundSize = "cover";
+    root.style.backgroundPosition = "center center";
+    root.style.backgroundRepeat = "no-repeat";
+  }, [resolvedBackgroundSrc, theme]);
+
+  useEffect(() => {
+    const refs = Array.from(
+      new Set(
+        tiles
+          .map((tile) => tile.iconSrc?.trim())
+          .filter((source): source is string => typeof source === "string" && source.length > 0 && isImageRef(source))
+      )
+    );
+
+    let cancelled = false;
+
+    const loadMissing = async () => {
+      for (const ref of refs) {
+        if (tileIconObjectUrlsRef.current[ref]) {
+          continue;
+        }
+
+        try {
+          const blob = await getImageBlob(ref);
+          if (cancelled || !blob) {
+            continue;
+          }
+
+          const objectUrl = URL.createObjectURL(blob);
+          tileIconObjectUrlsRef.current[ref] = objectUrl;
+          setResolvedTileIconsByRef((previous) => ({ ...previous, [ref]: objectUrl }));
+        } catch {
+          // Ignore broken image references.
+        }
+      }
+    };
+
+    void loadMissing();
+
+    const removedRefs = Object.keys(tileIconObjectUrlsRef.current).filter((ref) => !refs.includes(ref));
+    if (removedRefs.length) {
+      for (const ref of removedRefs) {
+        URL.revokeObjectURL(tileIconObjectUrlsRef.current[ref]);
+        delete tileIconObjectUrlsRef.current[ref];
+      }
+
+      setResolvedTileIconsByRef((previous) => {
+        const next = { ...previous };
+        for (const ref of removedRefs) {
+          delete next[ref];
+        }
+        return next;
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tiles]);
+
+  useEffect(() => {
+    return () => {
+      for (const objectUrl of Object.values(tileIconObjectUrlsRef.current)) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      tileIconObjectUrlsRef.current = {};
+    };
+  }, []);
 
   useEffect(() => {
     let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
@@ -215,7 +384,7 @@ const App = () => {
     const finalName = tileNameInput.trim() || fallbackName;
     const finalIconSrc = tileIconInput.trim();
 
-    if (finalIconSrc && !isImageSource(finalIconSrc)) {
+    if (finalIconSrc && !isStoredImageSource(finalIconSrc)) {
       setTileError("Icon must be an image URL or a selected local image.");
       return;
     }
@@ -359,7 +528,7 @@ const App = () => {
     iconFileInputRef.current?.click();
   };
 
-  const handleIconFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleIconFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) {
       return;
@@ -374,22 +543,41 @@ const App = () => {
     // Clear any typed URL immediately when switching to a local file icon.
     setTileIconInput("");
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      if (!result.startsWith("data:image/")) {
-        setTileError("Failed to read selected icon file.");
-        return;
-      }
-
-      setTileIconInput(result);
+    try {
+      const imageRef = await saveImageFile(selected);
+      setTileIconInput(imageRef);
       setTileError("");
-    };
-    reader.onerror = () => {
+    } catch {
       setTileError("Failed to read selected icon file.");
-    };
+    }
 
-    reader.readAsDataURL(selected);
+    event.target.value = "";
+  };
+
+  const openBackgroundFilePicker = () => {
+    backgroundFileInputRef.current?.click();
+  };
+
+  const handleBackgroundFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0];
+    if (!selected) {
+      return;
+    }
+
+    if (!selected.type.startsWith("image/")) {
+      setSettingsError("Please choose an image file for the background.");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const imageRef = await saveImageFile(selected);
+      setBackgroundImageSrc(imageRef);
+      setSettingsError("");
+    } catch {
+      setSettingsError("Failed to read selected background file.");
+    }
+
     event.target.value = "";
   };
 
@@ -441,12 +629,14 @@ const App = () => {
       ? "Are you sure you want to restore defaults? This will reset all your settings and shortcuts."
       : `Are you sure you want to remove ${deleteTargetName}?`;
   const confirmButtonLabel = confirmAction === "restore-defaults" ? "Restore" : "Remove";
-  const isLocalIconSelected = tileIconInput.startsWith("data:image/");
+  const isLocalIconSelected = isImageRef(tileIconInput);
+  const isLocalBackgroundSelected = isImageRef(backgroundImageSrc);
 
   const buildCurrentSettings = (): Settings => {
     return {
       pageTitle: pageTitle.trim() || "Home",
       searchEngineName: currentEngine.name,
+      backgroundImageSrc: backgroundImageSrc || undefined,
       tiles,
       tileSize,
       rowsPerPage,
@@ -574,7 +764,12 @@ const App = () => {
                 const index = pageStartIndex + pageIndex;
                 const iconBg = tile.bgColor;
                 const iconFg = getTextColorForBackground(iconBg);
-                const iconSrc = tile.iconSrc?.trim();
+                const rawIconSrc = tile.iconSrc?.trim();
+                const iconSrc = rawIconSrc
+                  ? isImageRef(rawIconSrc)
+                    ? resolvedTileIconsByRef[rawIconSrc]
+                    : rawIconSrc
+                  : undefined;
 
                 return (
                   <a
@@ -706,6 +901,48 @@ const App = () => {
               placeholder="Home"
             />
           </div>
+          <div className="settings-group">
+            <label className="settings-label" htmlFor="background-image-input">
+              Background image URL
+            </label>
+            <input
+              id="background-image-input"
+              className="settings-input"
+              type="text"
+              value={isLocalBackgroundSelected ? "" : backgroundImageSrc}
+              onChange={(event) => setBackgroundImageSrc(event.target.value)}
+              disabled={isLocalBackgroundSelected}
+              placeholder="https://example.com/background.jpg"
+            />
+            <div className="icon-picker-row">
+              <Button appearance="default" shape="square" onClick={openBackgroundFilePicker}>
+                Choose from device
+              </Button>
+              <Button
+                appearance="outline"
+                shape="square"
+                disabled={!backgroundImageSrc}
+                onClick={() => {
+                  setBackgroundImageSrc("");
+                  setSettingsError("");
+                }}
+              >
+                Clear
+              </Button>
+              <input
+                ref={backgroundFileInputRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                tabIndex={-1}
+                onChange={handleBackgroundFileChange}
+              />
+            </div>
+            {isLocalBackgroundSelected ? (
+              <p className="icon-hint">Using local image file background.</p>
+            ) : null}
+          </div>
+
           <div className="settings-group">
             <label className="settings-label" htmlFor="favicon-input">
               Tab icon URL
