@@ -58,6 +58,8 @@ const App = () => {
   const [settingsError, setSettingsError] = useState("");
   const [gridColumns, setGridColumns] = useState(1);
   const [currentPage, setCurrentPage] = useState(0);
+  const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
+  const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null);
 
   const modalNameInputRef = useRef<HTMLInputElement | null>(null);
   const iconFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -248,6 +250,61 @@ const App = () => {
 
   const removeTile = (index: number) => {
     setTiles((previous) => previous.filter((_, tileIndex) => tileIndex !== index));
+  };
+
+  const reorderTiles = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) {
+      return;
+    }
+
+    setTiles((previous) => {
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= previous.length ||
+        toIndex >= previous.length
+      ) {
+        return previous;
+      }
+
+      const next = [...previous];
+      const [movedTile] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, movedTile);
+      return next;
+    });
+  };
+
+  const handleTileDragStart = (index: number, event: React.DragEvent<HTMLElement>) => {
+    setDragSourceIndex(index);
+    setDragTargetIndex(null);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(index));
+  };
+
+  const handleTileDragOver = (index: number, event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+
+    if (dragSourceIndex === null || dragSourceIndex === index) {
+      return;
+    }
+
+    reorderTiles(dragSourceIndex, index);
+    setDragSourceIndex(index);
+    setDragTargetIndex(index);
+  };
+
+  const handleTileDrop = (_index: number, event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    setDragSourceIndex(null);
+    setDragTargetIndex(null);
+  };
+
+  const handleTileDragEnd = () => {
+    setDragSourceIndex(null);
+    setDragTargetIndex(null);
   };
 
   const openConfirmDialog = (action: ConfirmAction, targetIndex: number | null = null) => {
@@ -522,11 +579,16 @@ const App = () => {
                 return (
                   <a
                     key={`${tile.name}-${index}`}
-                    className="tile"
+                    className={`tile${dragSourceIndex === index ? " tile-dragging" : ""}${dragTargetIndex === index ? " tile-drop-target" : ""}`}
                     href={tile.url}
                     title={tile.name}
                     target={tileOpenBehavior === "new" ? "_blank" : "_self"}
                     rel={tileOpenBehavior === "new" ? "noopener noreferrer" : undefined}
+                    draggable
+                    onDragStart={(event) => handleTileDragStart(index, event)}
+                    onDragOver={(event) => handleTileDragOver(index, event)}
+                    onDrop={(event) => handleTileDrop(index, event)}
+                    onDragEnd={handleTileDragEnd}
                   >
                     <span
                       className={`tile-icon${iconSrc ? " tile-icon-image" : ""}`}
@@ -537,7 +599,7 @@ const App = () => {
                       }
                     >
                       {iconSrc ? (
-                        <img src={iconSrc} alt="" loading="lazy" />
+                        <img src={iconSrc} alt="" loading="lazy" draggable={false} />
                       ) : (
                         tile.name.trim().slice(0, 1).toUpperCase()
                       )}
