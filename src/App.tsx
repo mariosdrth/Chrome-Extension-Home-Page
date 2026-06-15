@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { SubmitEvent } from "react";
 import type { ChangeEvent } from "react";
-import { BarsIcon, Button, CircleFullIcon, CloseIcon, RotateLeftIcon, PencilIcon, PlusIcon, Scrollbars, SearchIcon, ThemeToggle, useTheme } from "@polyutils/components";
+import JSZip from "jszip";
+import { BarsIcon, Button, CircleFullIcon, CloseIcon, RotateLeftIcon, DownloadIcon, UploadIcon, PencilIcon, PlusIcon, Scrollbars, SearchIcon, ThemeToggle, useTheme } from "@polyutils/components";
 import {
   defaultTileColor,
   defaultTileOpenBehavior,
   defaultRowsPerPage,
   defaultTileSize,
+  defaultFaviconSrc,
   engines,
   getDefaultSettings,
   getTextColorForBackground,
@@ -23,10 +25,20 @@ import {
   ClockFormat,
   writeSettings,
 } from "./AppStore";
-import { deleteImage, getImageBlob, isImageRef, saveImageFile } from "./ImageStore";
+import { deleteImage, getAllStoredImages, getImageBlob, isImageRef, saveImageBlobWithRefIfMissing, saveImageFile } from "./ImageStore";
 
 const App = () => {
   type ConfirmAction = "remove-tile" | "restore-defaults";
+  type ExportedImage = {
+    ref: string;
+    fileName: string;
+    contentType: string;
+  };
+
+  type ExportedImageManifest = {
+    version: 1;
+    images: ExportedImage[];
+  };
 
   const [initialSettings] = useState<Settings>(() => readSettings());
   const initialIndex = engines.findIndex(
@@ -46,7 +58,9 @@ const App = () => {
   );
   const [showClock, setShowClock] = useState<boolean>(initialSettings.showClock ?? true);
   const [clockFormat, setClockFormat] = useState<ClockFormat>(initialSettings.clockFormat ?? "24h");
-  const [faviconSrc, setFaviconSrc] = useState(initialSettings.faviconSrc ?? "");
+  const [faviconSrc, setFaviconSrc] = useState(
+    initialSettings.faviconSrc === defaultFaviconSrc ? "" : (initialSettings.faviconSrc ?? "")
+  );
   const [searchQuery, setSearchQuery] = useState("");
 
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -89,7 +103,7 @@ const App = () => {
     setTileOpenBehavior(settings.tileOpenBehavior);
     setShowClock(settings.showClock);
     setClockFormat(settings.clockFormat);
-    setFaviconSrc(settings.faviconSrc ?? "");
+    setFaviconSrc(settings.faviconSrc === defaultFaviconSrc ? "" : (settings.faviconSrc ?? ""));
     const nextEngineIndex = engines.findIndex((engine) => engine.name === settings.searchEngineName);
     setEngineIndex(nextEngineIndex >= 0 ? nextEngineIndex : 0);
   };
@@ -267,7 +281,7 @@ const App = () => {
       link.rel = "icon";
       document.head.appendChild(link);
     }
-    link.href = faviconSrc || "";
+    link.href = faviconSrc || defaultFaviconSrc;
   }, [faviconSrc]);
 
   useEffect(() => {
@@ -663,13 +677,35 @@ const App = () => {
     };
   };
 
-  const exportSettings = () => {
+  const exportSettings = async () => {
     const settings = buildCurrentSettings();
-    const blob = new Blob([`${JSON.stringify(settings, null, 2)}\n`], { type: "application/json" });
+    const zip = new JSZip();
+    zip.file("settings.json", `${JSON.stringify(settings, null, 2)}\n`);
+
+    const images = await getAllStoredImages();
+    const imageManifest: ExportedImageManifest = {
+      version: 1,
+      images: [],
+    };
+
+    for (const image of images) {
+      const key = encodeURIComponent(image.ref.slice("idb:".length));
+      const fileName = `images/${key}.bin`;
+      zip.file(fileName, await image.blob.arrayBuffer());
+      imageManifest.images.push({
+        ref: image.ref,
+        fileName,
+        contentType: image.blob.type || "application/octet-stream",
+      });
+    }
+
+    zip.file("images-manifest.json", `${JSON.stringify(imageManifest, null, 2)}\n`);
+
+    const blob = await zip.generateAsync({ type: "blob" });
     const fileUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = fileUrl;
-    link.download = "homepage-settings.json";
+    link.download = "homepage-settings.zip";
     link.click();
     URL.revokeObjectURL(fileUrl);
   };
@@ -678,35 +714,97 @@ const App = () => {
     importFileInputRef.current?.click();
   };
 
-  const handleImportSettingsChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleImportSettingsChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const contents = typeof reader.result === "string" ? reader.result : "";
-      try {
-        const importedSettings = normalizeSettings(JSON.parse(contents) as unknown);
-        if (!importedSettings) {
-          setSettingsError("The selected file does not contain valid settings.");
+    try {
+      if (selected.name.toLowerCase().endsWith(".zip")) {
+        const zip = await JSZip.loadAsync(selected);
+        const settingsFile = zip.file("settings.json");
+        if (!settingsFile) {
+          setSettingsError("The selected zip does not contain settings.json.");
+          event.target.value = "";
           return;
+        }
+
+        const settingsContents = await settingsFile.async("string");
+        const importedSettings = normalizeSettings(JSON.parse(settingsContents) as unknown);
+        if (!importedSettings) {
+          setSettingsError("The selected zip contains invalid settings.");
+          event.target.value = "";
+          return;
+        }
+
+        const manifestFile = zip.file("images-manifest.json");
+        if (manifestFile) {
+          const manifestContents = await manifestFile.async("string");
+          const parsedManifest = JSON.parse(manifestContents) as unknown;
+
+          if (
+            typeof parsedManifest === "object" &&
+            parsedManifest !== null &&
+            "images" in parsedManifest &&
+            Array.isArray((parsedManifest as { images: unknown }).images)
+          ) {
+            const entries = (parsedManifest as ExportedImageManifest).images;
+            for (const entry of entries) {
+              if (!entry || typeof entry !== "object") {
+                continue;
+              }
+
+              if (
+                typeof entry.ref !== "string" ||
+                !isImageRef(entry.ref) ||
+                typeof entry.fileName !== "string"
+              ) {
+                continue;
+              }
+
+              const imageFile = zip.file(entry.fileName);
+              if (!imageFile) {
+                continue;
+              }
+
+              const bytes = await imageFile.async("uint8array");
+              const imageBuffer = new ArrayBuffer(bytes.byteLength);
+              new Uint8Array(imageBuffer).set(bytes);
+              const blob = new Blob([imageBuffer], {
+                type: typeof entry.contentType === "string" && entry.contentType
+                  ? entry.contentType
+                  : "application/octet-stream",
+              });
+
+              await saveImageBlobWithRefIfMissing(entry.ref, blob);
+            }
+          }
         }
 
         applySettings(importedSettings);
         setSettingsError("");
         setIsPanelOpen(false);
-      } catch {
-        setSettingsError("The selected file is not valid JSON.");
+        event.target.value = "";
+        return;
       }
-    };
-    reader.onerror = () => {
-      setSettingsError("Unable to read the selected file.");
-    };
 
-    reader.readAsText(selected);
-    event.target.value = "";
+      const contents = await selected.text();
+      const importedSettings = normalizeSettings(JSON.parse(contents) as unknown);
+      if (!importedSettings) {
+        setSettingsError("The selected file does not contain valid settings.");
+        event.target.value = "";
+        return;
+      }
+
+      applySettings(importedSettings);
+      setSettingsError("");
+      setIsPanelOpen(false);
+      event.target.value = "";
+    } catch {
+      setSettingsError("Unable to import settings file.");
+      event.target.value = "";
+    }
   };
 
   return (
@@ -1077,6 +1175,7 @@ const App = () => {
             </Button>
             <Button
               appearance="default"
+              icon={<DownloadIcon />}
               styles={{ root: { width: "85%", justifySelf: "center" } }}
               onClick={exportSettings}
             >
@@ -1084,6 +1183,7 @@ const App = () => {
             </Button>
             <Button
               appearance="default"
+              icon={<UploadIcon />}
               styles={{ root: { width: "85%", justifySelf: "center" } }}
               onClick={openImportSettingsPicker}
             >
@@ -1092,7 +1192,7 @@ const App = () => {
             <input
               ref={importFileInputRef}
               type="file"
-              accept="application/json,.json"
+              accept="application/zip,.zip,application/json,.json"
               className="sr-only"
               tabIndex={-1}
               onChange={handleImportSettingsChange}

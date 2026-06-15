@@ -71,6 +71,7 @@ export const defaultTileColor = "#dbeafe";
 export const defaultTileSize: TileSize = "medium";
 export const defaultTileOpenBehavior: TileOpenBehavior = "same";
 export const defaultRowsPerPage = 4;
+export const defaultFaviconSrc = "/favicon.png";
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null;
@@ -168,7 +169,7 @@ export const getDefaultSettings = (): Settings => {
     tileOpenBehavior: defaultTileOpenBehavior,
     showClock: true,
     clockFormat: "24h",
-    faviconSrc: undefined,
+    faviconSrc: defaultFaviconSrc,
   };
 };
 
@@ -235,7 +236,7 @@ export const normalizeSettings = (value: unknown): Settings | null => {
     faviconSrc:
       typeof value.faviconSrc === "string" && isStoredImageSource(value.faviconSrc)
         ? value.faviconSrc
-        : undefined,
+        : defaults.faviconSrc,
   };
 };
 

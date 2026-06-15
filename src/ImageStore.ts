@@ -53,6 +53,10 @@ const refToKey = (ref: string): string => {
   return ref.startsWith(IMAGE_REF_PREFIX) ? ref.slice(IMAGE_REF_PREFIX.length) : ref;
 };
 
+const keyToRef = (key: string): string => {
+  return `${IMAGE_REF_PREFIX}${key}`;
+};
+
 export const isImageRef = (value: string): boolean => {
   return value.startsWith(IMAGE_REF_PREFIX) && value.length > IMAGE_REF_PREFIX.length;
 };
@@ -72,6 +76,29 @@ export const saveImageBlob = async (blob: Blob): Promise<string> => {
 
 export const saveImageFile = async (file: File): Promise<string> => {
   return saveImageBlob(file);
+};
+
+export const saveImageBlobWithRefIfMissing = async (ref: string, blob: Blob): Promise<boolean> => {
+  if (!isImageRef(ref)) {
+    return false;
+  }
+
+  const key = refToKey(ref);
+
+  return runTransaction<boolean>("readwrite", (store, resolve, reject) => {
+    const getRequest = store.get(key);
+    getRequest.onerror = () => reject(getRequest.error ?? new Error("Failed to read existing image blob."));
+    getRequest.onsuccess = () => {
+      if (getRequest.result instanceof Blob) {
+        resolve(false);
+        return;
+      }
+
+      const putRequest = store.put(blob, key);
+      putRequest.onerror = () => reject(putRequest.error ?? new Error("Failed to store image blob."));
+      putRequest.onsuccess = () => resolve(true);
+    };
+  });
 };
 
 export const getImageBlob = async (ref: string): Promise<Blob | null> => {
@@ -102,5 +129,28 @@ export const deleteImage = async (ref: string): Promise<void> => {
     const request = store.delete(key);
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error ?? new Error("Failed to delete image blob."));
+  });
+};
+
+export const getAllStoredImages = async (): Promise<Array<{ ref: string; blob: Blob }>> => {
+  return runTransaction<Array<{ ref: string; blob: Blob }>>("readonly", (store, resolve, reject) => {
+    const request = store.openCursor();
+    const images: Array<{ ref: string; blob: Blob }> = [];
+
+    request.onerror = () => reject(request.error ?? new Error("Failed to list stored images."));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(images);
+        return;
+      }
+
+      const value = cursor.value;
+      const key = typeof cursor.key === "string" ? cursor.key : String(cursor.key);
+      if (value instanceof Blob) {
+        images.push({ ref: keyToRef(key), blob: value });
+      }
+      cursor.continue();
+    };
   });
 };

@@ -178,7 +178,6 @@ body.has-custom-background {
   z-index: 13;
   padding: 0.45rem 0.75rem;
   border-radius: 0.5rem;
-  background: color-mix(in srgb, var(--pc-bg, #ffffff) 75%, transparent);
   color: var(--pc-fg, #111827);
   font-size: 6.22rem;
   font-weight: 700;

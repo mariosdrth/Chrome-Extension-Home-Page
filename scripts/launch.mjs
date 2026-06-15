@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as launcher from "chrome-launcher";
@@ -13,6 +13,10 @@ async function launch() {
     console.error(`Unpacked extension not found at: ${unpackedDir}`);
     console.error('Run "npm run bundle" first.');
     process.exit(1);
+  }
+
+  if (!existsSync(profileDir)) {
+    mkdirSync(profileDir, { recursive: true });
   }
 
   const chromeFlags = launcher.Launcher.defaultFlags()
