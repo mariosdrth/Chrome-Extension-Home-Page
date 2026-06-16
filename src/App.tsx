@@ -888,34 +888,39 @@ const App = () => {
                   : undefined;
 
                 return (
-                  <a
+                  <div
                     key={`${tile.name}-${index}`}
                     className={`tile${dragSourceIndex === index ? " tile-dragging" : ""}${dragTargetIndex === index ? " tile-drop-target" : ""}`}
-                    href={tile.url}
-                    title={tile.name}
-                    target={tileOpenBehavior === "new" ? "_blank" : "_self"}
-                    rel={tileOpenBehavior === "new" ? "noopener noreferrer" : undefined}
                     draggable
                     onDragStart={(event) => handleTileDragStart(index, event)}
                     onDragOver={(event) => handleTileDragOver(index, event)}
                     onDrop={(event) => handleTileDrop(index, event)}
                     onDragEnd={handleTileDragEnd}
                   >
-                    <span
-                      className={`tile-icon${iconSrc ? " tile-icon-image" : ""}`}
-                      style={
-                        iconSrc
-                          ? undefined
-                          : { background: iconBg, color: iconFg }
-                      }
+                    <a
+                      className="tile-link"
+                      href={tile.url}
+                      title={tile.name}
+                      target={tileOpenBehavior === "new" ? "_blank" : "_self"}
+                      rel={tileOpenBehavior === "new" ? "noopener noreferrer" : undefined}
+                      draggable={false}
                     >
-                      {iconSrc ? (
-                        <img src={iconSrc} alt="" loading="lazy" draggable={false} />
-                      ) : (
-                        tile.name.trim().slice(0, 1).toUpperCase()
-                      )}
-                    </span>
-                    <span className="tile-label">{tile.name}</span>
+                      <span
+                        className={`tile-icon${iconSrc ? " tile-icon-image" : ""}`}
+                        style={
+                          iconSrc
+                            ? undefined
+                            : { background: iconBg, color: iconFg }
+                        }
+                      >
+                        {iconSrc ? (
+                          <img src={iconSrc} alt="" loading="lazy" draggable={false} />
+                        ) : (
+                          tile.name.trim().slice(0, 1).toUpperCase()
+                        )}
+                      </span>
+                      <span className="tile-label">{tile.name}</span>
+                    </a>
                     <Button
                       appearance="transparent"
                       size="small"
@@ -942,7 +947,7 @@ const App = () => {
                         askRemoveTile(index);
                       }}
                     />
-                  </a>
+                  </div>
                 );
               })
             )}

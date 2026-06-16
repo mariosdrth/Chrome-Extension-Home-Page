@@ -199,16 +199,23 @@ body.has-custom-background {
   position: relative;
   display: grid;
   justify-items: center;
-  text-decoration: none;
-  color: var(--text);
   gap: 0.6rem;
   border-radius: 0.7rem;
   padding: 0.9rem 0.6rem 0.7rem;
-  cursor: grab;
+  cursor: pointer;
+}
+
+.tile-link {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  color: var(--text);
+  text-decoration: none;
 }
 
 .tile:active {
-  cursor: grabbing;
+  cursor: pointer;
 }
 
 .tile-dragging {
